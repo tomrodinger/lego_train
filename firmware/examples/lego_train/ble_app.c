@@ -136,7 +136,7 @@ void bt_enable_cb(int err)
     
     if (!err) {
         bt_get_local_public_address(&adv_addr);
-        sprintf(str, "robot_bl702_%02X%02X", adv_addr.a.val[0], adv_addr.a.val[1]);
+        sprintf(str, "lego_train_%02X%02X", adv_addr.a.val[0], adv_addr.a.val[1]);
         
         bt_set_name(str);
 
@@ -207,8 +207,6 @@ void ble_app_process(void)
 {
     
     if (is_jump_bootloader) {
-        motor_run(STOP, 0);
-
         vTaskDelay(pdMS_TO_TICKS(500));
 
         g_app_rst_reason = 0xAABBCCDD;

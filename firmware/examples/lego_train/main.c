@@ -129,6 +129,8 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
 
 static void main_task(void *pvParameters)
 {
+    ble_app_init();
+
     gpio_set_mode(LED_PIN, GPIO_OUTPUT_PP_MODE);
     gpio_write(LED_PIN, 0);
 
@@ -142,6 +144,8 @@ static void main_task(void *pvParameters)
         gpio_toggle(LED_PIN);
         gpio_toggle(MOTOR1_PIN);
         gpio_toggle(MOTOR2_PIN);
+
+        ble_app_process();
 
         vTaskDelay(pdMS_TO_TICKS(500));
     }
