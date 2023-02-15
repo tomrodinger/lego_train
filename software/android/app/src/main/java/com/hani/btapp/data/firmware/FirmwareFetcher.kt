@@ -8,5 +8,5 @@ import com.hani.btapp.domain.Product
 interface FirmwareFetcher {
     suspend fun fetchFirmware(name: String): Result<ByteArray>
     suspend fun getFirmware(name: String): Result<ByteArray>
-    suspend fun fetchAvailableFirmwares(): Result<Product>
+    suspend fun fetchAvailableFirmwares(DevName: String): Result<Product>
 }

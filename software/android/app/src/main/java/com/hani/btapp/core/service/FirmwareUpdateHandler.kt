@@ -17,6 +17,7 @@ import java.util.*
 import javax.inject.Inject
 import javax.inject.Singleton
 import java.util.concurrent.Semaphore
+import java.util.concurrent.TimeUnit
 
 /**
  * Created by hanif on 2022-08-21.
@@ -257,8 +258,10 @@ class FirmwareUpdateHandler @Inject constructor(
             gattInteractor.clearConnnectionStatus()
             delay(2000)
             gattInteractor.enableReconnect()
-            gattInteractor.makeNewConnection()
-            Logger.log("Robot in Boot loader mode")
+            is_write_success = gattInteractor.makeNewConnection()
+            if (is_write_success) {
+                Logger.log("Robot in Boot loader mode")
+            }
         }
         return is_write_success
     }
@@ -383,7 +386,7 @@ class FirmwareUpdateHandler @Inject constructor(
         tx_done_sem.tryAcquire()
         var is_write_success = gattInteractor.writeData(data)
         if (is_write_success) {
-            tx_done_sem.acquire()
+            is_write_success = tx_done_sem.tryAcquire(2, TimeUnit.SECONDS)
         }
         return is_write_success
     }

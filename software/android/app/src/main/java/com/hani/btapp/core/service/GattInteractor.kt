@@ -9,7 +9,7 @@ interface GattInteractor {
     suspend fun enableReconnect()
     suspend fun disableReconnect()
     suspend fun waitNewConnection() : Boolean
-    suspend fun makeNewConnection()
+    suspend fun makeNewConnection() : Boolean
     suspend fun disconnectDevice()
     suspend fun clearConnnectionStatus()
     suspend fun IsConnected() : Boolean

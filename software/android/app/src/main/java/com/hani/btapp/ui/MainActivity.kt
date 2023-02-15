@@ -205,6 +205,8 @@ class MainActivity : ComponentActivity() {
                         firmwareName = firmwareFileUiState.name ?: "",
                     ),
                     onUserEvent = {
+                        viewModel.setRobotName((connectionState as?
+                                GattConnectionState.Connected)?.deviceName ?: "-")
                         when (it) {
                             is UserEvent.Disconnect -> navController.popBackStack()
                             is UserEvent.BackToScanner -> navController.popBackStack()
@@ -226,6 +228,8 @@ class MainActivity : ComponentActivity() {
                         viewModel.onUserEvent(UserEvent.FirmwareChosen(it))
                     },
                     onRetryClick = {
+                        viewModel.setRobotName((connectionState as?
+                                GattConnectionState.Connected)?.deviceName ?: "-")
                         viewModel.onUserEvent(UserEvent.ChooseFirmware)
                     },
                 )

@@ -14,6 +14,10 @@ enum class RobotBLEModel {
                 return BL702
             }
 
+            if (s.lowercase().contains("lego") && s.lowercase().contains("train")) {
+                return BL702
+            }
+
             return null
         }
     }

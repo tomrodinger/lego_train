@@ -108,7 +108,7 @@ class BleScanner @Inject constructor(
                     else -> "-"
                 }
 
-                if (deviceName.contains("robot_bl702_")) {
+                if (deviceName.contains("robot_bl702_") || deviceName.contains("lego_train_")) {
                     val devices = _state.value.scannedDevices
                     var is_found = false
                     devices.forEach {

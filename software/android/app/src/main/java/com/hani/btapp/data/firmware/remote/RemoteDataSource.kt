@@ -7,5 +7,5 @@ import com.hani.btapp.domain.Product
  */
 interface RemoteDataSource {
     suspend fun fetchFirmwareData(firmwareFileName: String): Result<ByteArray>
-    suspend fun fetchAvailableFirmwares(): Result<Product>
+    suspend fun fetchAvailableFirmwares(DevName: String): Result<Product>
 }

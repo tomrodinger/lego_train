@@ -1,5 +1,6 @@
 package com.hani.btapp.data.firmware
 
+import com.hani.btapp.Logger
 import com.hani.btapp.data.firmware.remote.RemoteDataSource
 import com.hani.btapp.domain.Product
 import javax.inject.Inject
@@ -13,6 +14,7 @@ class FirmwareFetcherImpl @Inject constructor(
 
     private var availableFirmwaresCache: Product? = null
     private var firmwareDataCache = HashMap<String, ByteArray>()
+    private var PreDevName: String = ""
 
     override suspend fun fetchFirmware(name: String): Result<ByteArray> {
         return remote.fetchFirmwareData(name)
@@ -38,11 +40,17 @@ class FirmwareFetcherImpl @Inject constructor(
         }
     }
 
-    override suspend fun fetchAvailableFirmwares(): Result<Product> {
-        availableFirmwaresCache?.let { availableFirmwaresCache ->
-            return Result.success(availableFirmwaresCache)
+    override suspend fun fetchAvailableFirmwares(DevName: String): Result<Product> {
+        if ((PreDevName.contains("lego_train_") && DevName.contains("lego_train_")) ||
+                (PreDevName.contains("robot_bl702") && DevName.contains("robot_bl702"))) {
+            availableFirmwaresCache?.let { availableFirmwaresCache ->
+                return Result.success(availableFirmwaresCache)
+            }
         }
-        val res = remote.fetchAvailableFirmwares()
+
+        PreDevName = DevName
+
+        val res = remote.fetchAvailableFirmwares(DevName)
         return when {
             res.isSuccess -> {
                 res.getOrNull()?.let {

@@ -59,6 +59,7 @@ class MainActivityViewModel @Inject constructor(
     val closeFirmwareChooser: StateFlow<Boolean> = _closeFirmwareChooser
 
     private var robotBLEModel: RobotBLEModel? = null
+    private var RobotName:String = ""
 
     fun startScan() {
         viewModelScope.launch {
@@ -68,6 +69,10 @@ class MainActivityViewModel @Inject constructor(
 
     fun setRobotBLEType(robotBLEType: RobotBLEModel) {
         this.robotBLEModel = robotBLEType
+    }
+
+    fun setRobotName(name: String) {
+        this.RobotName = name
     }
 
     fun onUserEvent(event: UserEvent) {
@@ -134,7 +139,7 @@ class MainActivityViewModel @Inject constructor(
         )
 
         delay(1_000)
-        val res = firmwareFetcher.fetchAvailableFirmwares()
+        val res = firmwareFetcher.fetchAvailableFirmwares(this.RobotName)
         when {
             res.isSuccess -> {
                 res.getOrNull()?.let { product ->

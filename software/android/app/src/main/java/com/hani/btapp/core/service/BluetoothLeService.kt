@@ -139,15 +139,20 @@ class BluetoothLeService : LifecycleService(), GattInteractor {
         return true
     }
 
-    override suspend fun makeNewConnection() {
+    override suspend fun makeNewConnection() : Boolean {
         closeGattConnection()
         reconnect()
-        while(true) {
+        var timeout = 10000
+        while (timeout != 0) {
             if (con_sem.tryAcquire()) {
                 break
             }
+
             delay(1)
+            timeout = timeout - 1
         }
+
+        return (timeout != 0)
     }
 
     override suspend fun connectIfNeeded() {

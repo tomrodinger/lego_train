@@ -76,17 +76,26 @@ class RemoteDataSourceImpl @Inject constructor(
         }
     }
 
-    override suspend fun fetchAvailableFirmwares(): Result<Product> {
+    override suspend fun fetchAvailableFirmwares(DevName: String): Result<Product> {
         val client = getHttpClient()
+        var json_path = ""
+
+        if (DevName.contains("lego_train_")) {
+            json_path = "lego_train"
+        } else if (DevName.contains("robot_bl702")) {
+            json_path = "line_robot"
+        }
+
         val response = client.use {
             it.get{
                 contentType(ContentType.Application.Json)
                 url {
                     protocol = URLProtocol.HTTP
                     host = "9o.at"
-                    path("firmware_list.json")
+                    path(json_path, "firmware_list.json")
                 }}
         }
+
         /*val response = client.get {
             contentType(ContentType.Application.Json)
             url {
