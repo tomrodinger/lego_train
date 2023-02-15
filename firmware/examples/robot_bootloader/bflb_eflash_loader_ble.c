@@ -229,7 +229,7 @@ void bt_enable_cb(int err)
     
     if (!err) {
         bt_get_local_public_address(&adv_addr);
-        sprintf(str, "robot_bl702_%02X%02X", adv_addr.a.val[0], adv_addr.a.val[1]);
+        sprintf(str, "lego_train_%02X%02X", adv_addr.a.val[0], adv_addr.a.val[1]);
         
         bt_set_name(str);
 
