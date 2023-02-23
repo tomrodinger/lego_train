@@ -29,7 +29,7 @@ class BleScanner @Inject constructor(
     val state: StateFlow<BtScannerState> = _state
 
     // Stops scanning after 10 seconds.
-    private val scanPeriod = 10_000L
+    private val scanPeriod = 20_000L
 
     private val bleScanner by lazy {
         bluetoothProvider.bluetoothManager.adapter.bluetoothLeScanner

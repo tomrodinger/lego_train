@@ -74,6 +74,7 @@ class BluetoothLeService : LifecycleService(), GattInteractor {
     private var servicesReady = false
     private var notificationReady = false
     private var is_retry_connect = false
+    private var user_retry = 0
     private val con_sem: Semaphore = Semaphore(1, true)
 
     override fun onBind(intent: Intent): IBinder {
@@ -101,6 +102,7 @@ class BluetoothLeService : LifecycleService(), GattInteractor {
 
     override suspend fun disableReconnect() {
         is_retry_connect = false
+        user_retry = 0
     }
 
     override suspend fun clearConnnectionStatus() {
@@ -113,6 +115,7 @@ class BluetoothLeService : LifecycleService(), GattInteractor {
         notificationReady = false
         writeHandle = null
         readHandle = null
+        user_retry = 0
         bluetoothGatt?.let { gatt ->
             gatt.close()
             bluetoothGatt = null
@@ -188,6 +191,10 @@ class BluetoothLeService : LifecycleService(), GattInteractor {
         }
         return try {
             broadcastState(GattConnectionState.Connecting)
+            connectedAddress = address
+            if (user_retry == 0) {
+                user_retry = 20
+            }
             val device = btAdapter.getRemoteDevice(address)
             bluetoothGatt = device.connectGatt(this, false, gattCallback)
             true
@@ -257,8 +264,10 @@ class BluetoothLeService : LifecycleService(), GattInteractor {
     }
 
     private fun retry_connect() {
-        Logger.log("retry_connect var $is_retry_connect")
-        if (is_retry_connect) {
+        if ((is_retry_connect) || (user_retry > 0)) {
+            if (user_retry > 0) {
+                user_retry = user_retry - 1
+            }
             bluetoothGatt?.let { gatt ->
                 gatt.close()
                 bluetoothGatt = null
