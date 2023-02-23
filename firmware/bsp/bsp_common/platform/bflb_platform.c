@@ -100,7 +100,9 @@ void bflb_platform_init(uint32_t baudrate)
             device_control(uart, DEVICE_CTRL_CLR_INT, (void *)(UART_RX_FIFO_IT));
         }
 
+#ifndef NO_BOOT_BANNER
         bl_show_info();
+#endif
     }
 
     if (!initialized) {
@@ -116,7 +118,10 @@ void bflb_platform_init(uint32_t baudrate)
         if (ret != SUCCESS) {
             MSG("flash init fail!!!\r\n");
         }
+
+#ifndef NO_BOOT_BANNER
         bl_show_flashinfo();
+#endif
     }
 
     cpu_global_irq_enable();
