@@ -203,12 +203,14 @@ bool ble_app_is_connected(void)
     return (ble_bl_conn != NULL);
 }
 
-void ble_app_process(void)
+int ble_app_process(void)
 {
-    
+    int is_busy = 0;
+
     if (is_jump_bootloader) {
         vTaskDelay(pdMS_TO_TICKS(500));
 
+        BL_WR_REG(HBN_BASE, HBN_RSV3, 0x00);
         g_app_rst_reason = 0xAABBCCDD;
         __disable_irq();
         GLB_SW_POR_Reset();
@@ -216,4 +218,10 @@ void ble_app_process(void)
             /*empty dead loop*/
         }
     }
+
+    if (ble_bl_conn != NULL) {
+        is_busy = 1;
+    }
+
+    return is_busy;
 }

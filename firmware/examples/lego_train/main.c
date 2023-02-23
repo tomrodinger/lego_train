@@ -25,7 +25,10 @@
 #include "bl702_ef_ctrl.h"
 #include "bl702_glb.h"
 #include "hal_gpio.h"
+#include "hal_clock.h"
+#include "hal_pm.h"
 #include "hal_pwm.h"
+#include "hal_wdt.h"
 #include "bl702_sec_eng.h"
 #include <FreeRTOS.h>
 #include "task.h"
@@ -35,7 +38,11 @@
 #define MOTOR1_PIN 24
 #define MOTOR2_PIN 23
 
-static StackType_t main_stack[1024];
+#define SHUTDOWN_TIME       5
+#define THREAD_CYCLE_TIME   20
+#define THREAD_IDLE_TIME    (100 / THREAD_CYCLE_TIME)
+
+static StackType_t main_stack[2048];
 static StaticTask_t main_task_handle;
 
 extern uint8_t _heap_start;
@@ -127,8 +134,30 @@ void vApplicationGetTimerTaskMemory(StaticTask_t **ppxTimerTaskTCBBuffer, StackT
     *pulTimerTaskStackSize = configTIMER_TASK_STACK_DEPTH;
 }
 
+ATTR_TCM_SECTION void board_shutdown(uint32_t time)
+{
+    bt_le_adv_stop();
+    bt_disable();
+
+    BL_WR_REG(HBN_BASE, HBN_RSV3, 0xA5A55A5A);
+
+    gpio_set_mode(LED_PIN, GPIO_INPUT_MODE);
+    gpio_set_mode(MOTOR1_PIN, GPIO_INPUT_MODE);
+    gpio_set_mode(MOTOR2_PIN, GPIO_INPUT_MODE);
+
+    Sec_Eng_Trng_Disable();
+    bflb_platform_deinit();
+
+    pm_hbn_mode_enter(PM_HBN_LEVEL_1, time);
+}
+
 static void main_task(void *pvParameters)
 {
+    struct device *wdg;
+    uint8_t idle_cnt = 0;
+
+    wdg = device_find("wdg_rst");
+
     ble_app_init();
 
     gpio_set_mode(LED_PIN, GPIO_OUTPUT_PP_MODE);
@@ -141,18 +170,26 @@ static void main_task(void *pvParameters)
     gpio_write(MOTOR2_PIN, 0);
 
     while(1) {
-        gpio_toggle(LED_PIN);
-        gpio_toggle(MOTOR1_PIN);
-        gpio_toggle(MOTOR2_PIN);
+        if (ble_app_process()) {
+            idle_cnt = 0;
+        }
+        
+        idle_cnt++;
+        if (idle_cnt >= THREAD_IDLE_TIME) {
+            board_shutdown(SHUTDOWN_TIME);
+        }
 
-        ble_app_process();
+        if (wdg) {
+            device_control(wdg, DEVICE_CTRL_RST_WDT_COUNTER, NULL);
+        }
 
-        vTaskDelay(pdMS_TO_TICKS(500));
+        vTaskDelay(pdMS_TO_TICKS(THREAD_CYCLE_TIME));
     }
 }
 
 int main(void)
 {
+    struct device *wdg;
     uint32_t tmpVal = 0;
 
     bflb_platform_print_set(0);
@@ -165,6 +202,20 @@ int main(void)
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal, AON_XTAL_CAPCODE_IN_AON, 33);
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal, AON_XTAL_CAPCODE_OUT_AON, 33);
     BL_WR_REG(AON_BASE, AON_XTAL_CFG, tmpVal);
+
+    wdt_register(WDT_INDEX, "wdg_rst");
+    wdg = device_find("wdg_rst");
+
+    if (wdg) {
+        uint32_t wdg_timeout = 0xFFFF;
+
+        device_control(wdg, DEVICE_CTRL_CLR_INT, NULL);
+        device_open(wdg, 0);
+        device_write(wdg, 0, &wdg_timeout, sizeof(wdg_timeout));
+    }
+
+    GLB_Disable_DLL_All_Clks();
+    GLB_Power_Off_DLL();
 
     Sec_Eng_Trng_Enable();
 
