@@ -55,6 +55,7 @@
 #include "hal_wdt.h"
 
 #define UART_DEBUG          1
+#define APP_FLASH_ADDR      0x30000
 
 extern uint8_t _heap_start;
 extern uint8_t _heap_size; // @suppress("Type cannot be resolved")
@@ -656,6 +657,22 @@ static void main_task(void *pvParameters)
     }
 }
 
+void ATTR_TCM_SECTION jump_to_app(void)
+{
+    /* reinit mtimer clock */
+    system_mtimer_clock_reinit();
+
+    /* Sec eng deinit*/
+    hal_boot2_reset_sec_eng();
+
+    hal_boot2_sboot_finish();
+
+    if (flash_set_cache(1, 1, 0x00, APP_FLASH_ADDR) == BFLB_BOOT2_SUCCESS) {
+        pentry_t pentry = (pentry_t)BL702_FLASH_XIP_BASE;
+        pentry();
+    }
+}
+
 /****************************************************************************/ /**
  * @brief  Boot2 main function
  *
@@ -670,6 +687,14 @@ int main(void)
 
     system_mtimer_clock_init();
     peripheral_clock_init();
+
+#ifdef APP_FLASH_ADDR
+    if (BL_RD_REG(HBN_BASE, HBN_RSV3) == 0xA5A55A5A) {
+        BL_WR_REG(HBN_BASE, HBN_RSV3, 0x00);
+        flash_init();
+        jump_to_app();
+    }
+#endif
 
 #if (BLSP_BOOT2_MODE == BOOT2_MODE_RELEASE)
     bflb_platform_print_set(1);
