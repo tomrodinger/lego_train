@@ -55,7 +55,7 @@
 #include "hal_wdt.h"
 
 #define UART_DEBUG          1
-#define APP_FLASH_ADDR      0x30000
+// #define APP_FLASH_ADDR      0x30000
 
 extern uint8_t _heap_start;
 extern uint8_t _heap_size; // @suppress("Type cannot be resolved")
@@ -73,7 +73,6 @@ uint8_t g_ps_mode = BFLB_PSM_ACTIVE;
 uint8_t g_cpu_count;
 uint32_t g_user_hash_ignored = 0;
 uint8_t g_usb_init_flag = 0;
-uint32_t g_app_rst_reason __attribute__((section(".AppSection")));
 
 void user_vAssertCalled(void) __attribute__((weak, alias("vAssertCalled")));
 void vAssertCalled(void)
@@ -511,9 +510,9 @@ static void main_task(void *pvParameters)
 
     pt_table_dump();
 
-    if (g_app_rst_reason == 0xAABBCCDD) {
+    if (BL_RD_REG(HBN_BASE, HBN_RSV3) == 0xAABBCCDD) {
+        BL_WR_REG(HBN_BASE, HBN_RSV3, 0x00);
         boot_timeout = 10000 / 20;
-        g_app_rst_reason = 0;
     }
 
     while (boot_timeout) {
@@ -657,6 +656,7 @@ static void main_task(void *pvParameters)
     }
 }
 
+#ifdef APP_FLASH_ADDR
 void ATTR_TCM_SECTION jump_to_app(void)
 {
     /* reinit mtimer clock */
@@ -672,6 +672,7 @@ void ATTR_TCM_SECTION jump_to_app(void)
         pentry();
     }
 }
+#endif
 
 /****************************************************************************/ /**
  * @brief  Boot2 main function
