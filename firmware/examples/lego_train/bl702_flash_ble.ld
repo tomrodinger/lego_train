@@ -17,8 +17,8 @@ OUTPUT_ARCH( "riscv" )
 /* configure the entry point */
 ENTRY(_enter)
 
-StackSize = 0x2000; /*  4KB */
-HeapSize  = 0x2000; /*  4KB */
+StackSize = 0x1000; /*  4KB */
+HeapSize  = 0x800; /*  2KB */
 __EM_SIZE = DEFINED(ble_controller_init) ? 8K : 0K;
 
 MEMORY
@@ -26,9 +26,11 @@ MEMORY
     xip_memory  (rx)  : ORIGIN = 0x23000000, LENGTH = 296K
     itcm_memory (rx)  : ORIGIN = 0x22014000, LENGTH = 16K
     dtcm_memory (rx)  : ORIGIN = 0x42018000, LENGTH = 32K
-    ram_memory  (!rx) : ORIGIN = 0x42020000, LENGTH = 32K
-    rsvd_memory (!rx) : ORIGIN = 0x42028000, LENGTH = 1K
-    ram2_memory (!rx) : ORIGIN = 0x42028400, LENGTH = (31K - __EM_SIZE)
+    ram_memory  (!rx) : ORIGIN = 0x42020000, LENGTH = 20K /* OCRAM_1*/
+    ram1_memory (!rx) : ORIGIN = 0x42025000, LENGTH = 4K
+    rsvd_memory (!rx) : ORIGIN = 0x42026000, LENGTH = 16K /*OCRAM_2*/
+    ram2_memory (!rx) : ORIGIN = 0x4202A000, LENGTH = (24K - __EM_SIZE) /*OCRAM_3*/
+    hbn_memory  (rx)  : ORIGIN = 0x40010000, LENGTH = 0xE00
 }
 
 SECTIONS
@@ -122,7 +124,20 @@ SECTIONS
         __tcm_code_end__ = .;
     } > itcm_memory
 
-    __dtcm_load_addr = __itcm_load_addr + SIZEOF(.itcm_region);
+    __hbn_load_addr = __itcm_load_addr + SIZEOF(.itcm_region);
+
+    .hbn_ram_region : AT (__hbn_load_addr)
+    {
+        . = ALIGN(4);
+        __hbn_ram_start__ = .;
+        *bl702_hbn_wakeup*.o*(.rodata*)
+        *(.hbn_ram_code*)
+        *(.hbn_ram_data)
+        . = ALIGN(4);
+        __hbn_ram_end__ = .;
+    } > hbn_memory
+
+    __dtcm_load_addr = __hbn_load_addr + SIZEOF(.hbn_ram_region);
 
     .dtcm_region : AT (__dtcm_load_addr)
     {
@@ -136,66 +151,19 @@ SECTIONS
         __tcm_data_end__ = .;
     } > dtcm_memory
 
-    /* .heap_dummy section doesn't contains any symbols. It is only
-     * used for linker to calculate size of heap sections, and assign
-     * values to heap symbols later */
-    .heap_dummy (NOLOAD):
-    {
-        . = ALIGN(0x4);
-        . = . + HeapSize;
-        . = ALIGN(0x4);
-    } > dtcm_memory
 
-    _HeapBase = ORIGIN(dtcm_memory) + LENGTH(dtcm_memory) - StackSize - HeapSize;
-    _HeapSize = HeapSize;
-
-    /* Check if data + heap + stack exceeds RAM limit */
-    ASSERT(_HeapBase >= __tcm_data_end__, "region RAM overflowed with stack")
-
-    .heap1_dummy (NOLOAD):
-    {
-        _heap1_start = .;
-        . = ALIGN(0x4);
-        . = . + 0x4000;
-        . = ALIGN(0x4);
-        _heap1_end = .;
-    } > dtcm_memory
-
-    PROVIDE( _heap1_size = _heap1_end - _heap1_start);
-
-    /*************************************************************************/
-    /* .stack_dummy section doesn't contains any symbols. It is only
-     * used for linker to calculate size of stack sections, and assign
-     * values to stack symbols later */
-    .stack_dummy (NOLOAD):
-    {
-        . = ALIGN(0x4);
-        . = . + StackSize;
-        . = ALIGN(0x4);
-    } > dtcm_memory
-
-    /* Set stack top to end of RAM, and stack limit move down by
-     * size of stack_dummy section */
-    __StackTop = ORIGIN(dtcm_memory) + LENGTH(dtcm_memory);
-    PROVIDE( __freertos_irq_stack_top = __StackTop);
-    __StackLimit = __StackTop - SIZEOF(.stack_dummy);
-
-    /* Check if data + heap + stack exceeds RAM limit */
-    ASSERT(__StackLimit >= __tcm_data_end__, "region RAM overflowed with stack")
-    /*************************************************************************/
 
     __system_ram_load_addr = __dtcm_load_addr + SIZEOF(.dtcm_region);
 
     .system_ram_data_region : AT (__system_ram_load_addr)
     {
         . = ALIGN(4);
-
-        KEEP(*(.AppSection))
-
         __system_ram_data_start__ = .;
 
         *(.system_ram)
-
+        *hal_pm_util*.o*(.rodata*)
+        *(.pds_ram_code*)
+        *(.pds_ram_data)
         . = ALIGN(4);
         __system_ram_data_end__ = .;
     } > ram_memory
@@ -245,22 +213,60 @@ SECTIONS
         __noinit_data_end__ = .;
     } > ram_memory
 
+    /*************************************************************************/
+    /* .stack_dummy section doesn't contains any symbols. It is only
+     * used for linker to calculate size of stack sections, and assign
+     * values to stack symbols later */
+    .stack_dummy (NOLOAD):
+    {
+        . = ALIGN(0x4);
+        . = . + StackSize;
+        . = ALIGN(0x4);
+    } > ram_memory
+
+    /* Set stack top to end of RAM, and stack limit move down by
+     * size of stack_dummy section */
+    __StackTop = ORIGIN(ram_memory) + LENGTH(ram_memory);
+    PROVIDE( __freertos_irq_stack_top = __StackTop);
+    __StackLimit = __StackTop - SIZEOF(.stack_dummy);
+
+    /* Check if data + heap + stack exceeds RAM limit */
+    ASSERT(__StackLimit >= __noinit_data_end__, "region RAM overflowed with stack")
+	
+	
+	
+    /*************************************************************************/
     .heap (NOLOAD):
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         __HeapBase = .;
 
         /*__end__ = .;*/
         /*end = __end__;*/
         KEEP(*(.heap*))
 
-        . = ALIGN(4);
+        . = ALIGN(8);
+        . = . + HeapSize;
+        . = ALIGN(8);
         __HeapLimit = .;
+
     } > ram_memory
-    __HeapLimit = ORIGIN(ram_memory) + LENGTH(ram_memory);
 
-    PROVIDE( _heap_start = ORIGIN(ram2_memory) );
-    PROVIDE( _heap_size = LENGTH(ram2_memory) );
+    /*__HeapBase = __noinit_data_end__;
+    __HeapLimit = ORIGIN(ram_memory) + LENGTH(ram_memory) - StackSize;
+    */
+    /*
+    PROVIDE( _heap_start = . );
+    PROVIDE( _heap_size = ORIGIN(ram_memory) + LENGTH(ram_memory) - _heap_start );
+    */
+    PROVIDE( _heap_start = ORIGIN(ram1_memory) );
+    PROVIDE( _heap_size = LENGTH(ram1_memory) );
 
+    PROVIDE( _heap2_start = ORIGIN(ram2_memory) );
+    PROVIDE( _heap2_size = LENGTH(ram2_memory) );
+
+
+    /* PDS backup address */
+    PROVIDE ( __ld_pds_bak_addr = 0x40010E00 );
 }
 

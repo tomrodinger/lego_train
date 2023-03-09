@@ -64,7 +64,11 @@
 #define configGENERATE_RUN_TIME_STATS           0
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 1
 #define configUSE_STATS_FORMATTING_FUNCTIONS    2
+#ifdef LOW_POWER
+#define configUSE_TICKLESS_IDLE                 1
+#else
 #define configUSE_TICKLESS_IDLE                 0
+#endif
 
 /* Co-routine definitions. */
 #define configUSE_CO_ROUTINES           0

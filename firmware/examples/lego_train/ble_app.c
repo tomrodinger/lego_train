@@ -20,10 +20,10 @@
 #define TO_BLE_INTERVAL(x)  ((x) * 0.625)
 
 static struct bt_conn *ble_bl_conn = NULL;
-SemaphoreHandle_t tx_sem;
+static SemaphoreHandle_t tx_sem;
+static SemaphoreHandle_t rx_sem;
 static struct bt_gatt_exchange_params exchg_mtu;
 static bool is_jump_bootloader = false;
-uint32_t g_app_rst_reason __attribute__((section(".AppSection")));
 
 #define MAGIC_CODE  "BL702BOOT"
 
@@ -31,6 +31,8 @@ static int ble_app_recv(struct bt_conn *conn,
               const struct bt_gatt_attr *attr, const void *buf,
               u16_t len, u16_t offset, u8_t flags)
 {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
     /*If prepare write, it will return 0 */
     if (flags == BT_GATT_WRITE_FLAG_PREPARE) {
         return 0;
@@ -45,6 +47,8 @@ static int ble_app_recv(struct bt_conn *conn,
     }
 
     is_jump_bootloader = true;
+
+    xSemaphoreGiveFromISR( rx_sem, &xHigherPriorityTaskWoken );
 
     return len;
 }
@@ -130,8 +134,8 @@ void bt_enable_cb(int err)
     struct bt_le_adv_param adv_param = {
         .options = BT_LE_ADV_OPT_CONNECTABLE | 
                     BT_LE_ADV_OPT_USE_NAME,
-        .interval_min = BT_GAP_ADV_SLOW_INT_MIN,
-        .interval_max = BT_GAP_ADV_SLOW_INT_MAX
+        .interval_min = BT_GAP_ADV_SLOW_INT_MIN * 2,
+        .interval_max = BT_GAP_ADV_SLOW_INT_MAX * 2
     };
     
     if (!err) {
@@ -149,6 +153,7 @@ void bt_enable_cb(int err)
 void ble_app_init(void)
 {
     tx_sem = xSemaphoreCreateBinary();
+    rx_sem = xSemaphoreCreateBinary();
 
     GLB_Set_EM_Sel(GLB_EM_8KB);
     ble_controller_init(configMAX_PRIORITIES - 1);
@@ -205,13 +210,12 @@ bool ble_app_is_connected(void)
 
 int ble_app_process(void)
 {
-    int is_busy = 0;
+    xSemaphoreTake( rx_sem, portMAX_DELAY);
 
     if (is_jump_bootloader) {
         vTaskDelay(pdMS_TO_TICKS(500));
 
-        BL_WR_REG(HBN_BASE, HBN_RSV3, 0x00);
-        g_app_rst_reason = 0xAABBCCDD;
+        BL_WR_REG(HBN_BASE, HBN_RSV3, 0xAABBCCDD);
         __disable_irq();
         GLB_SW_POR_Reset();
         while (1) {
@@ -219,9 +223,5 @@ int ble_app_process(void)
         }
     }
 
-    if (ble_bl_conn != NULL) {
-        is_busy = 1;
-    }
-
-    return is_busy;
+    return 0;
 }
