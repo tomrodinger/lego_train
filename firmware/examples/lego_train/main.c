@@ -439,9 +439,15 @@ void vApplicationSleep(TickType_t xExpectedIdleTime_ms)
     int32_t expectedIdleTime_32768cycles = 0;
     eSleepModeStatus eSleepStatus;
     bool freertos_max_idle = false;
+    struct device *wdg;
 
-    if (ble_app_is_connected())
+    if (ble_app_is_connected()) {
+        wdg = device_find("wdg_rst");
+        if (wdg) {
+            device_control(wdg, DEVICE_CTRL_RST_WDT_COUNTER, NULL);
+        }
         return;
+    }
 
     if (xExpectedIdleTime_ms + xTaskGetTickCount() == portMAX_DELAY) {
         freertos_max_idle = true;
@@ -488,6 +494,12 @@ void vApplicationSleep(TickType_t xExpectedIdleTime_ms)
         }
 
         bl_pds_restore();
+
+        wdg = device_find("wdg_rst");
+
+        if (wdg) {
+            device_control(wdg, DEVICE_CTRL_RST_WDT_COUNTER, NULL);
+        }
     }
 }
 
@@ -534,7 +546,6 @@ int main(void)
     tmpVal = BL_SET_REG_BITS_VAL(tmpVal, AON_XTAL_CAPCODE_OUT_AON, 33);
     BL_WR_REG(AON_BASE, AON_XTAL_CFG, tmpVal);
 
-#if 0
     wdt_register(WDT_INDEX, "wdg_rst");
     wdg = device_find("wdg_rst");
 
@@ -545,7 +556,6 @@ int main(void)
         device_open(wdg, 0);
         device_write(wdg, 0, &wdg_timeout, sizeof(wdg_timeout));
     }
-#endif
 
     vPortDefineHeapRegions(xHeapRegions);
 

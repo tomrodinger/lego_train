@@ -18,12 +18,16 @@
 #include "motor.h"
 
 #define TO_BLE_INTERVAL(x)  ((x) * 0.625)
+#define WAIT_TIMEOUT        (24 * 3600000)
+#define ADV_1S_DURATION     (30)
 
 static struct bt_conn *ble_bl_conn = NULL;
 static SemaphoreHandle_t tx_sem;
 static SemaphoreHandle_t rx_sem;
 static struct bt_gatt_exchange_params exchg_mtu;
 static bool is_jump_bootloader = false;
+static uint32_t adv_duration = 0;
+static bool is_adv_2s = false;
 
 #define MAGIC_CODE  "BL702BOOT"
 
@@ -64,36 +68,6 @@ static void ble_tx_mtu_size(struct bt_conn *conn, u8_t err,
 
 }
 
-static void bl_connected(struct bt_conn *conn, uint8_t err)
-{
-    int tx_octets = 0x00fb;
-    int tx_time = 0x0848;
-    struct bt_le_conn_param param;
-
-    param.interval_max=0x28;
-    param.interval_min=0x18;
-    param.latency=0;
-    param.timeout=400;
-
-	if (err) {
-
-	} else {
-        ble_bl_conn = conn;
-        bt_conn_le_param_update(conn, &param);
-
-        if (!bt_le_set_data_len(ble_bl_conn, tx_octets, tx_time)) {
-            exchg_mtu.func = ble_tx_mtu_size;
-            //exchange mtu size after connected.
-            bt_gatt_exchange_mtu(ble_bl_conn, &exchg_mtu);
-        }
-	}
-}
-
-static void bl_disconnected(struct bt_conn *conn, uint8_t reason)
-{
-    ble_bl_conn = NULL;
-}
-
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
 	// BT_DATA(BT_DATA_NAME_COMPLETE, "bl702_robot", sizeof("bl702_robot")),
@@ -122,6 +96,49 @@ static struct bt_gatt_attr blattrs[]= {
 
 static struct bt_gatt_service ble_bl_server = BT_GATT_SERVICE(blattrs);
 
+static void bl_connected(struct bt_conn *conn, uint8_t err)
+{
+    int tx_octets = 0x00fb;
+    int tx_time = 0x0848;
+    struct bt_le_conn_param param;
+
+    param.interval_max=0x28;
+    param.interval_min=0x18;
+    param.latency=0;
+    param.timeout=400;
+
+	if (err) {
+
+	} else {
+        is_adv_2s = false;
+        adv_duration = 0;
+
+        ble_bl_conn = conn;
+        bt_conn_le_param_update(conn, &param);
+
+        if (!bt_le_set_data_len(ble_bl_conn, tx_octets, tx_time)) {
+            exchg_mtu.func = ble_tx_mtu_size;
+            //exchange mtu size after connected.
+            bt_gatt_exchange_mtu(ble_bl_conn, &exchg_mtu);
+        }
+	}
+}
+
+static void bl_disconnected(struct bt_conn *conn, uint8_t reason)
+{
+    ble_bl_conn = NULL;
+
+    struct bt_le_adv_param adv_param = {
+        .options = BT_LE_ADV_OPT_CONNECTABLE |
+                    BT_LE_ADV_OPT_USE_NAME,
+        .interval_min = BT_GAP_ADV_SLOW_INT_MIN,
+        .interval_max = BT_GAP_ADV_SLOW_INT_MAX
+    };
+
+    bt_le_adv_stop();
+    bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), NULL, 0);
+}
+
 static struct bt_conn_cb conn_callbacks = {
 	.connected = bl_connected,
 	.disconnected = bl_disconnected,
@@ -134,8 +151,8 @@ void bt_enable_cb(int err)
     struct bt_le_adv_param adv_param = {
         .options = BT_LE_ADV_OPT_CONNECTABLE | 
                     BT_LE_ADV_OPT_USE_NAME,
-        .interval_min = BT_GAP_ADV_SLOW_INT_MIN * 2,
-        .interval_max = BT_GAP_ADV_SLOW_INT_MAX * 2
+        .interval_min = BT_GAP_ADV_SLOW_INT_MIN,
+        .interval_max = BT_GAP_ADV_SLOW_INT_MAX
     };
     
     if (!err) {
@@ -210,16 +227,33 @@ bool ble_app_is_connected(void)
 
 int ble_app_process(void)
 {
-    xSemaphoreTake( rx_sem, portMAX_DELAY);
+    if (xSemaphoreTake( rx_sem, pdMS_TO_TICKS(WAIT_TIMEOUT)) == pdTRUE) {
+        if (is_jump_bootloader) {
+            vTaskDelay(pdMS_TO_TICKS(500));
 
-    if (is_jump_bootloader) {
-        vTaskDelay(pdMS_TO_TICKS(500));
+            BL_WR_REG(HBN_BASE, HBN_RSV3, 0xAABBCCDD);
+            __disable_irq();
+            GLB_SW_POR_Reset();
+            while (1) {
+                /*empty dead loop*/
+            }
+        }
+    } else {
+        if (is_adv_2s == false) {
+            adv_duration++;
+            if (adv_duration >= ADV_1S_DURATION) {
+                struct bt_le_adv_param adv_param = {
+                    .options = BT_LE_ADV_OPT_CONNECTABLE |
+                               BT_LE_ADV_OPT_USE_NAME,
+                    .interval_min = BT_GAP_ADV_SLOW_INT_MIN * 2,
+                    .interval_max = BT_GAP_ADV_SLOW_INT_MAX * 2
+                };
+                adv_duration = 0;
+                is_adv_2s = true;
 
-        BL_WR_REG(HBN_BASE, HBN_RSV3, 0xAABBCCDD);
-        __disable_irq();
-        GLB_SW_POR_Reset();
-        while (1) {
-            /*empty dead loop*/
+                bt_le_adv_stop();
+                bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), NULL, 0);
+            }
         }
     }
 
