@@ -6,6 +6,7 @@
 #include "bflb_platform.h"
 #include "bl702_glb.h"
 #include "hal_common.h"
+#include "hal_gpio.h"
 
 #include "bluetooth.h"
 #include "conn.h"
@@ -33,6 +34,9 @@
 #define BLE_STATUS_DISCOVERED_DES       0x08
 #define BLE_STATUS_SUBCRIBED            0x10
 #define BLE_STATUS_DEVICE_CONFIRMED     0x20
+#define BLE_STATUS_BT_PRESSED           0x40
+
+#define BUTTON_PIN                      28
 
 static struct bt_conn *ble_bl_conn = NULL;
 static TaskHandle_t cur_tsk;
@@ -389,6 +393,12 @@ void ble_app_find_device(void)
     }
 }
 
+static void bt_press(uint32_t pin)
+{
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    xTaskNotifyFromISR(cur_tsk, BLE_STATUS_BT_PRESSED, eSetBits, &xHigherPriorityTaskWoken);
+}
+
 void ble_app_process(void)
 {
     struct bt_le_adv_param adv_param = {
@@ -396,23 +406,36 @@ void ble_app_process(void)
         .interval_min = BT_GAP_ADV_FAST_INT_MIN_1 / 2,
         .interval_max = BT_GAP_ADV_FAST_INT_MAX_1 / 2
     };
+    uint32_t status;
 
     adv_buf[0] = BLE_ADV_MOTOR_CODE & 0xFF;
     adv_buf[1] = BLE_ADV_MOTOR_CODE >> 8;
     adv_buf[2] = 0x00;
     bt_le_adv_start(&adv_param, ad, ARRAY_SIZE(ad), NULL, 0);
 
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(5000));
+    gpio_set_mode(BUTTON_PIN, GPIO_SYNC_RISING_TRIGER_INT_MODE);
+    gpio_attach_irq(BUTTON_PIN, bt_press);
+    gpio_irq_enable(BUTTON_PIN, ENABLE);
 
-        adv_buf[2]++;
-        if (adv_buf[2] >= 0x04) {
-            adv_buf[2] = 0x00;
+    while (1) {
+        xTaskNotifyWait(0, ULONG_MAX, &status, portMAX_DELAY);
+
+        if (status & BLE_STATUS_BT_PRESSED) {
+            if ((adv_buf[2] & 0x01) == 0) {
+                adv_buf[2] |= 0x01;
+            } else if ((adv_buf[2] & 0x02) == 0) {
+                adv_buf[2] |= 0x02;
+            } else if (adv_buf[2] & 0x03) {
+                adv_buf[2] = 0;
+            } else {
+                adv_buf[2] = 0;
+            }
+
+            bt_le_adv_update_data(
+                    ad,
+                    ARRAY_SIZE(ad),
+                    NULL,
+                    0);
         }
-        bt_le_adv_update_data(
-            ad,
-            ARRAY_SIZE(ad),
-            NULL,
-            0);
     }
 }
