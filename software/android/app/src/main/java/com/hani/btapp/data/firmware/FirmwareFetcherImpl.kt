@@ -17,7 +17,7 @@ class FirmwareFetcherImpl @Inject constructor(
     private var PreDevName: String = ""
 
     override suspend fun fetchFirmware(name: String): Result<ByteArray> {
-        return remote.fetchFirmwareData(name)
+        return remote.fetchFirmwareData(PreDevName, name)
     }
 
     override suspend fun getFirmware(name: String): Result<ByteArray> {

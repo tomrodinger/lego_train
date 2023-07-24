@@ -1,6 +1,7 @@
 package com.hani.btapp.data.firmware.remote
 
 import android.content.Context
+import com.hani.btapp.Logger
 import com.hani.btapp.data.NetworkClient
 import com.hani.btapp.domain.Product
 import com.hani.btapp.domain.ProductResponse
@@ -14,6 +15,8 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.decodeFromString
+import java.nio.ByteBuffer
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -48,13 +51,22 @@ class RemoteDataSourceImpl @Inject constructor(
         }
     }
 
-    override suspend fun fetchFirmwareData(firmwareFileName: String): Result<ByteArray> {
+    override suspend fun fetchFirmwareData(DevName: String, firmwareFileName: String): Result<ByteArray> {
         val client = getHttpClient()
+
+        var host_path = ""
+
+        if (DevName.contains("lego_train_")) {
+            host_path = "raw.githubusercontent.com/tomrodinger/lego_train/master/firmware_releases/"
+        } else if (DevName.contains("robot_bl702")) {
+            host_path = "raw.githubusercontent.com/tomrodinger/line_following_robot/master/firmware_releases/"
+        }
+
         val response = client.use {
             it.get{
                 url {
                 protocol = URLProtocol.HTTP
-                host = "9o.at"
+                host = host_path
                 path(firmwareFileName)
             }}
         }
@@ -78,12 +90,12 @@ class RemoteDataSourceImpl @Inject constructor(
 
     override suspend fun fetchAvailableFirmwares(DevName: String): Result<Product> {
         val client = getHttpClient()
-        var json_path = ""
+        var host_path = ""
 
         if (DevName.contains("lego_train_")) {
-            json_path = "lego_train"
+            host_path = "raw.githubusercontent.com/tomrodinger/lego_train/master/firmware_releases/"
         } else if (DevName.contains("robot_bl702")) {
-            json_path = "line_robot"
+            host_path = "raw.githubusercontent.com/tomrodinger/line_following_robot/master/firmware_releases/"
         }
 
         val response = client.use {
@@ -91,8 +103,8 @@ class RemoteDataSourceImpl @Inject constructor(
                 contentType(ContentType.Application.Json)
                 url {
                     protocol = URLProtocol.HTTP
-                    host = "9o.at"
-                    path(json_path, "firmware_list.json")
+                    host = host_path
+                    path("firmware_list.json")
                 }}
         }
 
@@ -106,8 +118,13 @@ class RemoteDataSourceImpl @Inject constructor(
         }*/
         return when (val status = response.status) {
             HttpStatusCode.OK -> {
-                val res: ProductResponse = response.body()
-                Result.success(res.product)
+                val str_res: String = response.body()
+                val json = kotlinx.serialization.json.Json {
+                    ignoreUnknownKeys = true
+                }
+                var product_res: ProductResponse = json.decodeFromString(str_res)
+
+                Result.success(product_res.product)
             }
             else -> {
                 Result.failure(Exception("Could not fetch available firmwares. status: $status"))
