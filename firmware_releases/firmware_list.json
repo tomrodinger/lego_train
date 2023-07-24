@@ -1,0 +1,24 @@
+{
+  "product": {
+    "model": "R1",
+    "picture": "Robot_R1_picture.jpg",
+    "firmwares": [
+      {
+        "version": "0.0.1",
+        "compatibility": 0,
+        "date": "February 15, 2023",
+        "description": "Toggling both LED and motor",
+        "url": "20230215/lego_train_bl702.bin",
+        "sha256": "a603d4db6ed3f7a0843b9f8357c9c7db57eddd19eb003afaa4fb08efdb19cfe1"
+      },
+      {
+        "version": "0.0.1",
+        "compatibility": 0,
+        "date": "February 15, 2023",
+        "description": "Toggling LED only",
+        "url": "20230215/lego_train_bl702_ledonly.bin",
+        "sha256": "eddfc36cc19b966c91e8330725d817fea9a9e83720bbeb2b2d8fec6b684ab11e"
+      }
+    ]
+  }
+}
